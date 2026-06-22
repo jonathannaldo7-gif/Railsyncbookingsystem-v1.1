@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Seat;
+use App\Models\Train;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -22,6 +23,21 @@ class SeatController extends Controller
 
         $seats = $query->get();
 
+        // Ensure seats have a concrete price so frontend and booking use the same amount.
+        foreach ($seats as $seat) {
+            if (empty($seat->price) || $seat->price <= 0) {
+                $computed = 0;
+                if ($seat->train) {
+                    $computed = min($seat->train->marketPrice(), 1200000);
+                } else {
+                    $computed = 200000;
+                }
+                $seat->price = $computed;
+                // persist price to avoid mismatches later when booking is created
+                $seat->save();
+            }
+        }
+
         return response()->json([
             'status' => 'success',
             'message' => 'Seats retrieved successfully',
@@ -37,6 +53,7 @@ class SeatController extends Controller
         $validator = Validator::make($request->all(), [
             'train_id' => 'required|exists:trains,id',
             'seat_number' => 'required|string|max:10',
+            'price' => 'sometimes|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -47,7 +64,14 @@ class SeatController extends Controller
             ], 422);
         }
 
-        $seat = Seat::create($request->all());
+        $train = Train::find($request->train_id);
+        $price = $request->filled('price') ? min($request->price, 1200000) : ($train ? min($train->marketPrice(), 1200000) : 0);
+
+        $seat = Seat::create([
+            'train_id' => $request->train_id,
+            'seat_number' => $request->seat_number,
+            'price' => $price,
+        ]);
 
         return response()->json([
             'status' => 'success',
@@ -68,6 +92,12 @@ class SeatController extends Controller
                 'status' => 'error',
                 'message' => 'Seat not found'
             ], 404);
+        }
+
+        if (empty($seat->price) || $seat->price <= 0) {
+            $computed = $seat->train ? min($seat->train->marketPrice(), 1200000) : 200000;
+            $seat->price = $computed;
+            $seat->save();
         }
 
         return response()->json([
@@ -95,6 +125,7 @@ class SeatController extends Controller
             'train_id' => 'sometimes|required|exists:trains,id',
             'seat_number' => 'sometimes|required|string|max:10',
             'is_reserved' => 'sometimes|boolean',
+            'price' => 'sometimes|required|numeric|min:0',
         ]);
 
         if ($validator->fails()) {

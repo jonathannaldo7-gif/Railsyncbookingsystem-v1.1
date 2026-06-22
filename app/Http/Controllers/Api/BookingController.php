@@ -23,6 +23,8 @@ class BookingController extends Controller
      */
     public function index()
     {
+        $this->bookingService->expirePendingPayments();
+
         $bookings = Booking::with(['user', 'train', 'seat'])->get();
         return response()->json([
             'status' => 'success',

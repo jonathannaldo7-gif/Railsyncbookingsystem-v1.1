@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\BookingController;
+use App\Http\Controllers\Api\BookingPaymentController;
 use App\Http\Controllers\Api\SeatController;
 use App\Http\Controllers\Api\TrainController;
 use App\Http\Controllers\Api\UserController;
@@ -22,3 +23,4 @@ Route::post('seats/{id}/release', [SeatController::class, 'release']);
 
 Route::apiResource('bookings', BookingController::class);
 Route::post('bookings/{id}/confirm', [BookingController::class, 'confirm']);
+Route::post('bookings/{id}/pay', [BookingPaymentController::class, 'pay']);

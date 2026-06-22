@@ -11,10 +11,12 @@ class Seat extends Model
         'train_id',
         'seat_number',
         'is_reserved',
+        'price',
     ];
 
     protected $casts = [
         'is_reserved' => 'boolean',
+        'price' => 'decimal:2',
     ];
 
     public function train()

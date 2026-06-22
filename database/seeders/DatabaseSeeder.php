@@ -16,23 +16,69 @@ class DatabaseSeeder extends Seeder
      * Seed the application's database.
      */
     public function run(): void
-    {
+        {
         User::firstOrCreate([
-            'email' => 'admin@example.com',
+            'email' => 'admin@railsyncb.com',
         ], [
-            'name' => 'Admin User',
+            'name' => 'Admin RailSyncBooking',
             'password' => bcrypt('admin123'),
             'role' => 'admin',
         ]);
 
         User::firstOrCreate([
-            'email' => 'passenger@example.com',
+            'email' => 'RidhatulA@gmail.com',
         ], [
-            'name' => 'Passenger User',
-            'password' => bcrypt('passenger123'),
+            'name' => 'Ridhatul Aulia Putri',
+            'password' => bcrypt('Ridhatul123'),
             'role' => 'passenger',
         ]);
 
+        User::firstOrCreate([
+            'email' => 'MychelM@gmail.com',
+        ], [
+            'name' => 'Mychel Munthe',
+            'password' => bcrypt('Mychel123'),
+            'role' => 'passenger',
+        ]);
+        User::firstOrCreate([
+            'email' => 'JonathanR@gmail.com',
+        ], [
+            'name' => 'Jonathan Rionaldo',
+            'password' => bcrypt('Rionaldo123'),
+            'role' => 'passenger',
+        ]);
+
+        User::firstOrCreate([
+            'email' => 'AlifiaM@gmail.com',
+        ], [
+            'name' => 'Alifia Mareta Cahyani',
+            'password' => bcrypt('Alifia123'),
+            'role' => 'passenger',
+        ]);
+
+        User::firstOrCreate([
+            'email' => 'MuhammadEka@gmail.com',
+        ], [
+            'name' => 'Muhammad Eka Ferdhiansyah',
+            'password' => bcrypt('Eka123'),
+            'role' => 'passenger',
+        ]);
+        
+        Train::firstOrCreate([
+            'name' => 'Argo Parahyangan',
+        ], [
+            'route' => 'Bandung - Gambir',
+            'departure_time' => '2026-05-10 06:00:00',
+            'arrival_time' => '2026-05-10 09:00:00',
+            'capacity' => 10,
+        ]);
+
+        Seat::firstOrCreate([
+            'train_id' => 1,
+            'seat_number' => 'A1',
+        ], [
+            'is_reserved' => false,
+        ]);
         $trains = [
             [
                 'name' => 'Argo Parahyangan',

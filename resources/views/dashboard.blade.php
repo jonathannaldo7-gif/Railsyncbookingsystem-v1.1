@@ -26,11 +26,6 @@
                 <input id="register-email" type="email" placeholder="user@example.com">
                 <label for="register-password">Password</label>
                 <input id="register-password" type="password" placeholder="Minimum 8 characters">
-                <label for="register-role">Role</label>
-                <select id="register-role" disabled>
-                    <option value="passenger">Passenger</option>
-                    <option value="admin">Admin</option>
-                </select>
                 <button id="register-user">Register</button>
                 <p class="note">Buat akun baru untuk masuk dan melakukan reservasi.</p>
             </div>
@@ -40,29 +35,33 @@
 
     <div class="card" id="booking-card" style="display: none;">
         <h2>Reservasi Saya</h2>
-        <table id="bookings-table">
-            <thead>
-                <tr><th>ID</th><th>Kereta</th><th>Kursi</th><th>Tanggal</th><th>Status</th></tr>
-            </thead>
-            <tbody></tbody>
-        </table>
+        <div class="table-wrapper">
+            <table id="bookings-table">
+                <thead>
+                    <tr><th>ID</th><th>Kereta</th><th>Kursi</th><th>Tanggal</th><th>Status</th><th>Jumlah Bayar</th><th>Pembayaran</th><th>Sisa Waktu</th><th>Aksi</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
     </div>
 
     <div class="card" id="admin-booking-card" style="display: none;">
         <h2>ACC Reservasi (Admin)</h2>
-        <table id="admin-bookings-table">
-            <thead>
-                <tr><th>ID</th><th>Penumpang</th><th>Kereta</th><th>Kursi</th><th>Tanggal</th><th>Status</th><th>Aksi</th></tr>
-            </thead>
-            <tbody></tbody>
-        </table>
+        <div class="table-wrapper">
+            <table id="admin-bookings-table">
+                <thead>
+                    <tr><th>No</th><th>Penumpang</th><th>Kereta</th><th>Kursi</th><th>Tanggal</th><th>Status</th><th>Jumlah Bayar</th><th>Pembayaran</th><th>Aksi</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
     </div>
 
     <div class="card" id="train-card" style="display: none;">
         <h2>Daftar Kereta</h2>
         <table id="trains-table">
             <thead>
-                <tr><th>ID</th><th>Nama</th><th>Rute</th><th>Berangkat</th><th>Tiba</th><th>Aksi</th></tr>
+                <tr><th>No</th><th>Nama KA</th><th>Rute</th><th>Aksi</th></tr>
             </thead>
             <tbody></tbody>
         </table>
@@ -71,27 +70,47 @@
     <div class="card" id="admin-train-bookings-card" style="display: none;">
         <h2>Reservasi Kereta: <span id="admin-selected-train-name"></span></h2>
         <table id="admin-train-bookings-table">
-            <thead>
-                <tr><th>ID</th><th>Penumpang</th><th>Kursi</th><th>Tanggal</th><th>Status</th><th>Aksi</th></tr>
+                <thead>
+                <tr><th>No</th><th>Penumpang</th><th>Kursi</th><th>Tanggal</th><th>Status</th><th>Jumlah Bayar</th><th>Pembayaran</th><th>Aksi</th></tr>
             </thead>
             <tbody></tbody>
         </table>
     </div>
 
-    <div class="card" id="seat-card" style="display: none;">
-        <h2>Tempat Duduk untuk Kereta: <span id="selected-train-name"></span></h2>
-        <div id="seat-message"></div>
-        <div class="seat-card-info">
-            <div id="seat-info">Klik kursi untuk melihat detail.</div>
+    <div class="card" id="admin-paid-card" style="display: none;">
+        <h2>Penumpang Terbayar per Kereta (Monitoring)</h2>
+        <div class="table-wrapper">
+            <table id="admin-paid-table">
+                <thead>
+                    <tr><th>Kereta</th><th>Penumpang</th><th>Kursi</th><th>Tanggal</th><th>Jumlah Bayar</th><th>Waktu Bayar</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
         </div>
-        <div class="seat-grid" id="seat-grid"></div>
+    </div>
+
+    <div class="card" id="seat-card" style="display: none;">
+        <h2>Informasi Tiket Kereta</h2>
+        <div class="ticket-card">
+            <div class="ticket-summary">
+                <h3>Info Kereta</h3>
+                <div id="selected-train-schedule" class="ticket-detail">Pilih kereta terlebih dahulu untuk melihat jadwal.</div>
+            </div>
+            <div class="seat-selection">
+                <h3>Pilih Kursi</h3>
+                <div class="seat-card-info">
+                    <div id="seat-info"><strong>2. Pilih kursi untuk melihat detail dan pesan.</strong></div>
+                </div>
+                <div class="seat-grid" id="seat-grid"></div>
+            </div>
+        </div>
     </div>
 @endsection
 
 @push('scripts')
 <script>
     let selectedTrainId = null;
-    let selectedTrainName = '';
+    let selectedTrain = null;
     let selectedSeat = null;
 
     function showMessage(message, type = 'success', containerId = 'message-container') {
@@ -101,24 +120,32 @@
         setTimeout(() => { container.innerHTML = ''; }, 5000);
     }
 
+    function formatDateTime(value) {
+        if (!value) return '-';
+        const date = new Date(value);
+        const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        const dateString = date.toLocaleDateString('id-ID');
+        const timeString = date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        return `${days[date.getDay()]}, ${dateString} ${timeString}`;
+    }
+
     async function loadTrains() {
         const { body } = await requestJson('GET', '/api/trains');
         const tbody = document.querySelector('#trains-table tbody');
         tbody.innerHTML = '';
         if (!body.data || body.data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6">Belum ada kereta.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4">Belum ada kereta.</td></tr>';
             return;
         }
-        body.data.forEach(train => {
+        body.data.forEach((train, index) => {
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td>${train.id}</td>
+                <td>${index + 1}</td>
                 <td>${train.name}</td>
                 <td>${train.route}</td>
-                <td>${new Date(train.departure_time).toLocaleString()}</td>
-                <td>${new Date(train.arrival_time).toLocaleString()}</td>
-                <td><button class="secondary" onclick="selectTrain(${train.id}, '${train.name.replace(/'/g, "\\'")}')">Pilih</button></td>
+                <td><button class="secondary select-train-button">Pilih</button></td>
             `;
+            row.querySelector('.select-train-button').addEventListener('click', () => selectTrain(train));
             tbody.appendChild(row);
         });
     }
@@ -131,20 +158,47 @@
         const pendingBookings = body.data.filter(booking => booking.status === 'pending');
 
         if (pendingBookings.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7">Tidak ada reservasi pending.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9">Tidak ada reservasi pending.</td></tr>';
             return;
         }
 
-        pendingBookings.forEach(booking => {
+        pendingBookings.forEach((booking, idx) => {
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td>${booking.id}</td>
+                <td>${idx + 1}</td>
                 <td>${booking.user ? booking.user.name : booking.user_id}</td>
                 <td>${booking.train ? booking.train.name : booking.train_id}</td>
                 <td>${booking.seat ? booking.seat.seat_number : booking.seat_id}</td>
                 <td>${new Date(booking.booking_date).toLocaleDateString()}</td>
                 <td>${formatStatus(booking.status)}</td>
-                <td><button class="secondary" onclick="confirmBooking(${booking.id})">ACC</button></td>
+                <td>${Number(booking.payment_amount).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}</td>
+                <td>${formatPaymentStatus(booking.payment_status)}</td>
+                <td>${booking.status === 'pending' ? `<button class="secondary" onclick="confirmBooking(${booking.id})">ACC</button>` : ''}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    async function loadAdminPaidUsers() {
+        const { body } = await requestJson('GET', '/api/bookings');
+        const tbody = document.querySelector('#admin-paid-table tbody');
+        tbody.innerHTML = '';
+
+        const paid = (body.data || []).filter(b => b.payment_status === 'paid');
+        if (paid.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6">Belum ada pembayaran terkonfirmasi.</td></tr>';
+            return;
+        }
+
+        paid.forEach(booking => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${booking.train ? booking.train.name : booking.train_id}</td>
+                <td>${booking.user ? booking.user.name : booking.user_id}</td>
+                <td>${booking.seat ? booking.seat.seat_number : booking.seat_id}</td>
+                <td>${new Date(booking.booking_date).toLocaleDateString()}</td>
+                <td>${Number(booking.payment_amount).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}</td>
+                <td>${booking.paid_at ? new Date(booking.paid_at).toLocaleString() : '-'}</td>
             `;
             tbody.appendChild(row);
         });
@@ -158,7 +212,7 @@
         const userBookings = (body.data || []).filter(booking => booking.user_id === auth.currentUser.id);
 
         if (userBookings.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5">Belum ada reservasi.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8">Belum ada reservasi.</td></tr>';
             return false;
         }
 
@@ -170,6 +224,12 @@
                 <td>${booking.seat ? booking.seat.seat_number : booking.seat_id}</td>
                 <td>${new Date(booking.booking_date).toLocaleDateString()}</td>
                 <td>${formatStatus(booking.status)}</td>
+                <td>${Number(booking.payment_amount).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}</td>
+                <td>${formatPaymentStatus(booking.payment_status)}</td>
+                <td class="payment-countdown" data-expiry="${booking.payment_expires_at || ''}">${booking.payment_status !== 'paid' && booking.payment_expires_at ? formatCountdown(booking.payment_expires_at) : '-'}</td>
+                <td class="actions">
+                    ${booking.status === 'confirmed' && booking.payment_status === 'unpaid' ? `<button class="secondary" onclick="payBooking(${booking.id})">Bayar</button>` : ''}
+                </td>
             `;
             tbody.appendChild(row);
         });
@@ -178,43 +238,69 @@
     }
 
     function selectSeat(seat) {
-        selectedSeat = seat;
-        updateSeatInfo();
+        // fetch latest seat data to ensure price/is_reserved are authoritative
+        (async () => {
+            try {
+                const { status, body } = await requestJson('GET', `/api/seats/${seat.id}`);
+                if (status === 200 && body && body.data) {
+                    selectedSeat = body.data;
+                } else {
+                    selectedSeat = seat;
+                }
+            } catch (e) {
+                selectedSeat = seat;
+            }
+            updateSeatInfo();
+        })();
     }
 
-    function selectTrain(id, name) {
-        selectedTrainId = id;
-        selectedTrainName = name;
+    function selectTrain(train) {
+        selectedTrainId = train.id;
+        selectedTrain = train;
         selectedSeat = null;
-        document.getElementById('selected-train-name').textContent = name;
-        document.getElementById('admin-selected-train-name').textContent = name;
+        document.getElementById('admin-selected-train-name').textContent = train.name;
+        const schedule = document.getElementById('selected-train-schedule');
+        if (schedule) {
+            schedule.innerHTML = `Nama KA: <strong>${train.name}</strong><br>Rute: <strong>${train.route}</strong><br>Berangkat: <strong>${formatDateTime(train.departure_time)}</strong><br>Tiba: <strong>${formatDateTime(train.arrival_time)}</strong>`;
+        }
         document.getElementById('seat-card').style.display = 'none';
         document.getElementById('admin-train-bookings-card').style.display = 'none';
 
         if (auth.currentUser && auth.currentUser.role === 'admin') {
             document.getElementById('admin-train-bookings-card').style.display = 'block';
-            loadAdminTrainBookings(id);
+            loadAdminTrainBookings(train.id);
             return;
         }
 
         document.getElementById('seat-card').style.display = 'block';
         document.getElementById('seat-info').textContent = 'Klik kursi untuk melihat detail.';
-        loadSeats(id);
+        loadSeats(train.id);
     }
 
     function updateSeatInfo() {
         const info = document.getElementById('seat-info');
         if (!info) return;
         if (!selectedSeat) {
-            info.innerHTML = 'Pilih kursi untuk melihat detail.';
+            const trainInfo = selectedTrain ? `
+                <p>Kereta: <strong>${selectedTrain.name}</strong></p>
+                <p>Rute: <strong>${selectedTrain.route}</strong></p>
+                <p>Berangkat: <strong>${formatDateTime(selectedTrain.departure_time)}</strong></p>
+                <p>Tiba: <strong>${formatDateTime(selectedTrain.arrival_time)}</strong></p>
+            ` : '<p>Pilih kursi untuk melihat detail.</p>';
+            info.innerHTML = selectedTrain ? `<div>${trainInfo}</div>` : 'Pilih kursi untuk melihat detail.';
             return;
         }
 
+        const seatPrice = getSeatPrice(selectedSeat);
         const status = selectedSeat.is_reserved ? 'Sudah terreservasi' : 'Tersedia';
         const seatDetails = `
             <h4>${selectedSeat.seat_number}</h4>
             <p>Status: <strong>${status}</strong></p>
-            <p>Kereta: <strong>${selectedTrainName}</strong></p>
+            <p>Kereta: <strong>${selectedTrain ? selectedTrain.name : '-'}</strong></p>
+            <p>Rute: <strong>${selectedTrain ? selectedTrain.route : '-'}</strong></p>
+            <p>Berangkat: <strong>${selectedTrain ? formatDateTime(selectedTrain.departure_time) : '-'}</strong></p>
+            <p>Tiba: <strong>${selectedTrain ? formatDateTime(selectedTrain.arrival_time) : '-'}</strong></p>
+            <p>Harga: <strong>${Number(seatPrice).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}</strong></p>
         `;
 
         let actionButton = '';
@@ -252,11 +338,32 @@
     }
 
     async function loadSeats(trainId) {
-        const { body } = await requestJson('GET', `/api/seats?train_id=${trainId}`);
+        const { status, body } = await requestJson('GET', `/api/seats?train_id=${trainId}`);
+        if (status !== 200) {
+            showMessage(body.message || 'Gagal memuat kursi', 'error', 'seat-message');
+            return;
+        }
         const seats = body.data || [];
         selectedSeat = null;
         updateSeatInfo();
         renderSeatGrid(seats);
+    }
+
+    function getSeatPrice(seat) {
+        const price = Number(seat.price) || 0;
+        if (price > 0) {
+            return price;
+        }
+        if (seat.train && seat.train.route) {
+            const route = seat.train.route.toLowerCase();
+            if (route.includes('jakarta') && route.includes('bandung')) return 150000;
+            if (route.includes('jakarta') && route.includes('surabaya')) return 650000;
+            if (route.includes('jakarta') && route.includes('yogyakarta')) return 250000;
+            if (route.includes('bandung') && route.includes('yogyakarta')) return 320000;
+            if (route.includes('bandung') && route.includes('surabaya')) return 500000;
+        }
+
+        return 200000;
     }
 
     async function loadAdminTrainBookings(trainId) {
@@ -267,18 +374,20 @@
         const trainBookings = body.data.filter(booking => Number(booking.train_id) === Number(trainId));
 
         if (trainBookings.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6">Belum ada reservasi untuk kereta ini.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8">Belum ada reservasi untuk kereta ini.</td></tr>';
             return;
         }
 
-        trainBookings.forEach(booking => {
+        trainBookings.forEach((booking, idx) => {
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td>${booking.id}</td>
+                <td>${idx + 1}</td>
                 <td>${booking.user ? booking.user.name : booking.user_id}</td>
                 <td>${booking.seat ? booking.seat.seat_number : booking.seat_id}</td>
                 <td>${new Date(booking.booking_date).toLocaleDateString()}</td>
                 <td>${formatStatus(booking.status)}</td>
+                <td>${Number(booking.payment_amount).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}</td>
+                <td>${formatPaymentStatus(booking.payment_status)}</td>
                 <td>${booking.status === 'pending' ? `<button class="secondary" onclick="confirmBooking(${booking.id})">ACC</button>` : ''}</td>
             `;
             tbody.appendChild(row);
@@ -332,16 +441,29 @@
         }
 
         loginCard.style.display = 'none';
-        bookingCard.style.display = 'block';
+        // hide passenger personal booking card for admin users
+        bookingCard.style.display = auth.currentUser.role === 'admin' ? 'none' : 'block';
         trainCard.style.display = 'block';
         document.getElementById('seat-card').style.display = 'none';
         document.getElementById('admin-train-bookings-card').style.display = 'none';
+        document.getElementById('admin-paid-card').style.display = 'none';
 
         if (auth.currentUser.role === 'admin') {
             adminBookingCard.style.display = 'block';
+            document.getElementById('admin-paid-card').style.display = 'block';
             loadAdminBookings();
+            loadAdminPaidUsers();
+
+            // keep paid-monitor updated every 10 seconds
+            if (!window.__adminPaidInterval) {
+                window.__adminPaidInterval = setInterval(loadAdminPaidUsers, 10000);
+            }
         } else {
             adminBookingCard.style.display = 'none';
+            if (window.__adminPaidInterval) {
+                clearInterval(window.__adminPaidInterval);
+                window.__adminPaidInterval = null;
+            }
         }
 
         const hasBookings = auth.currentUser.role === 'passenger' ? await loadBookings() : false;
@@ -353,8 +475,8 @@
         }
 
         loadTrains();
-        if (selectedTrainId) {
-            selectTrain(selectedTrainId, selectedTrainName);
+        if (selectedTrain) {
+            selectTrain(selectedTrain);
         }
 
         updateRegisterRoleAccess();
@@ -374,10 +496,25 @@
                 selectedSeat.is_reserved = true;
                 updateSeatInfo();
             }
-            loadSeats(selectedTrainId);
-            updateDashboardState(); // Reload to show bookings
+            await loadSeats(selectedTrainId);
+            await updateDashboardState(); // Reload to show bookings
         } else {
             showMessage(bookingResponse.body.message || 'Gagal reservasi kursi', 'error', 'seat-message');
+        }
+    }
+
+    async function releaseSeat(id) {
+        const { status, body } = await requestJson('POST', `/api/seats/${id}/release`);
+        if (status === 200) {
+            showMessage('Reservasi kursi dibatalkan', 'success', 'seat-message');
+            if (selectedSeat && selectedSeat.id === id) {
+                selectedSeat.is_reserved = false;
+                updateSeatInfo();
+            }
+            await loadSeats(selectedTrainId);
+            await updateDashboardState();
+        } else {
+            showMessage(body.message || 'Gagal batalkan reservasi kursi', 'error', 'seat-message');
         }
     }
 
@@ -391,6 +528,50 @@
             showMessage(body.message || 'Gagal ACC reservasi', 'error', 'dashboard-message');
         }
     }
+
+    async function payBooking(bookingId) {
+        const payload = { payment_method: 'card' };
+        const { status, body } = await requestJson('POST', `/api/bookings/${bookingId}/pay`, payload);
+        if (status === 200) {
+            showMessage('Pembayaran berhasil diproses', 'success', 'dashboard-message');
+            loadBookings();
+            loadAdminBookings();
+        } else {
+            showMessage(body.message || 'Gagal memproses pembayaran', 'error', 'dashboard-message');
+            loadBookings();
+            loadAdminBookings();
+        }
+    }
+
+    function formatCountdown(expiry) {
+        if (!expiry) {
+            return '-';
+        }
+
+        const end = new Date(expiry).getTime();
+        const now = Date.now();
+        const diff = end - now;
+
+        if (diff <= 0) {
+            return 'Expired';
+        }
+
+        const minutes = Math.floor(diff / 1000 / 60);
+        const seconds = Math.floor((diff / 1000) % 60);
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    function updateCountdownTimers() {
+        document.querySelectorAll('.payment-countdown').forEach(cell => {
+            const expiry = cell.getAttribute('data-expiry');
+            if (!expiry) {
+                return;
+            }
+            cell.textContent = formatCountdown(expiry);
+        });
+    }
+
+    setInterval(updateCountdownTimers, 1000);
 
     document.getElementById('login-user').addEventListener('click', async () => {
         const payload = {
@@ -411,7 +592,6 @@
             name: document.getElementById('register-name').value,
             email: document.getElementById('register-email').value,
             password: document.getElementById('register-password').value,
-            role: document.getElementById('register-role').value,
         };
         const { status, body } = await requestJson('POST', '/api/users', payload);
         if (status === 201) {

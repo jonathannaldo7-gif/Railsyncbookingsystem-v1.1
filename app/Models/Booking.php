@@ -15,6 +15,17 @@ class Booking extends Model
         'seat_id',
         'booking_date',
         'status',
+        'payment_status',
+        'payment_amount',
+        'payment_method',
+        'payment_reference',
+        'paid_at',
+        'payment_expires_at',
+    ];
+
+    protected $casts = [
+        'paid_at' => 'datetime',
+        'payment_expires_at' => 'datetime',
     ];
 
     public function user()

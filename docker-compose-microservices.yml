@@ -1,0 +1,378 @@
+version: '3.8'
+
+services:
+  # ===== AUTH SERVICE (Port 8001) =====
+  auth-app:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: railsync_auth_app
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      - APP_NAME=RailSync-Auth
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - APP_URL=http://auth-app:8001
+      - DB_CONNECTION=mysql
+      - DB_HOST=auth-mysql
+      - DB_PORT=3306
+      - DB_DATABASE=railsync_auth
+      - DB_USERNAME=railsync
+      - DB_PASSWORD=secret
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QUEUE_CONNECTION=redis
+      - SERVICE_NAME=auth-service
+    volumes:
+      - ./services/auth-service:/app
+    ports:
+      - "8001:8000"
+    depends_on:
+      auth-mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - railsync_network
+
+  auth-nginx:
+    image: nginx:alpine
+    container_name: railsync_auth_nginx
+    restart: unless-stopped
+    ports:
+      - "9001:80"
+    volumes:
+      - ./services/auth-service/public:/app/public
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - auth-app
+    networks:
+      - railsync_network
+
+  auth-mysql:
+    image: mysql:8.0
+    container_name: railsync_auth_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: railsync_auth
+      MYSQL_ROOT_PASSWORD: root_secret
+      MYSQL_PASSWORD: secret
+      MYSQL_USER: railsync
+    ports:
+      - "3301:3306"
+    volumes:
+      - auth_mysql_data:/var/lib/mysql
+      - ./docker/mysql.cnf:/etc/mysql/conf.d/my.cnf
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      retries: 3
+      timeout: 5s
+    networks:
+      - railsync_network
+
+  # ===== TRAIN SERVICE (Port 8002) =====
+  train-app:
+    build:
+      context: ./services/train-service
+      dockerfile: Dockerfile
+    container_name: railsync_train_app
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      - APP_NAME=RailSync-Train
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - APP_URL=http://train-app:8002
+      - DB_CONNECTION=mysql
+      - DB_HOST=train-mysql
+      - DB_PORT=3306
+      - DB_DATABASE=railsync_train
+      - DB_USERNAME=railsync
+      - DB_PASSWORD=secret
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QUEUE_CONNECTION=redis
+      - SERVICE_NAME=train-service
+      - AUTH_SERVICE_URL=http://auth-app:8000
+    volumes:
+      - ./services/train-service:/app
+    ports:
+      - "8002:8000"
+    depends_on:
+      train-mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-app:
+        condition: service_started
+    networks:
+      - railsync_network
+
+  train-nginx:
+    image: nginx:alpine
+    container_name: railsync_train_nginx
+    restart: unless-stopped
+    ports:
+      - "9002:80"
+    volumes:
+      - ./services/train-service/public:/app/public
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - train-app
+    networks:
+      - railsync_network
+
+  train-mysql:
+    image: mysql:8.0
+    container_name: railsync_train_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: railsync_train
+      MYSQL_ROOT_PASSWORD: root_secret
+      MYSQL_PASSWORD: secret
+      MYSQL_USER: railsync
+    ports:
+      - "3302:3306"
+    volumes:
+      - train_mysql_data:/var/lib/mysql
+      - ./docker/mysql.cnf:/etc/mysql/conf.d/my.cnf
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      retries: 3
+      timeout: 5s
+    networks:
+      - railsync_network
+
+  # ===== BOOKING SERVICE (Port 8003) =====
+  booking-app:
+    build:
+      context: ./services/booking-service
+      dockerfile: Dockerfile
+    container_name: railsync_booking_app
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      - APP_NAME=RailSync-Booking
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - APP_URL=http://booking-app:8003
+      - DB_CONNECTION=mysql
+      - DB_HOST=booking-mysql
+      - DB_PORT=3306
+      - DB_DATABASE=railsync_booking
+      - DB_USERNAME=railsync
+      - DB_PASSWORD=secret
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QUEUE_CONNECTION=redis
+      - SERVICE_NAME=booking-service
+      - AUTH_SERVICE_URL=http://auth-app:8000
+      - TRAIN_SERVICE_URL=http://train-app:8000
+    volumes:
+      - ./services/booking-service:/app
+    ports:
+      - "8003:8000"
+    depends_on:
+      booking-mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-app:
+        condition: service_started
+      train-app:
+        condition: service_started
+    networks:
+      - railsync_network
+
+  booking-nginx:
+    image: nginx:alpine
+    container_name: railsync_booking_nginx
+    restart: unless-stopped
+    ports:
+      - "9003:80"
+    volumes:
+      - ./services/booking-service/public:/app/public
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - booking-app
+    networks:
+      - railsync_network
+
+  booking-mysql:
+    image: mysql:8.0
+    container_name: railsync_booking_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: railsync_booking
+      MYSQL_ROOT_PASSWORD: root_secret
+      MYSQL_PASSWORD: secret
+      MYSQL_USER: railsync
+    ports:
+      - "3303:3306"
+    volumes:
+      - booking_mysql_data:/var/lib/mysql
+      - ./docker/mysql.cnf:/etc/mysql/conf.d/my.cnf
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      retries: 3
+      timeout: 5s
+    networks:
+      - railsync_network
+
+  # ===== PAYMENT SERVICE (Port 8004) =====
+  payment-app:
+    build:
+      context: ./services/payment-service
+      dockerfile: Dockerfile
+    container_name: railsync_payment_app
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      - APP_NAME=RailSync-Payment
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - APP_URL=http://payment-app:8004
+      - DB_CONNECTION=mysql
+      - DB_HOST=payment-mysql
+      - DB_PORT=3306
+      - DB_DATABASE=railsync_payment
+      - DB_USERNAME=railsync
+      - DB_PASSWORD=secret
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QUEUE_CONNECTION=redis
+      - SERVICE_NAME=payment-service
+      - AUTH_SERVICE_URL=http://auth-app:8000
+      - BOOKING_SERVICE_URL=http://booking-app:8000
+    volumes:
+      - ./services/payment-service:/app
+    ports:
+      - "8004:8000"
+    depends_on:
+      payment-mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-app:
+        condition: service_started
+      booking-app:
+        condition: service_started
+    networks:
+      - railsync_network
+
+  payment-nginx:
+    image: nginx:alpine
+    container_name: railsync_payment_nginx
+    restart: unless-stopped
+    ports:
+      - "9004:80"
+    volumes:
+      - ./services/payment-service/public:/app/public
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - payment-app
+    networks:
+      - railsync_network
+
+  payment-mysql:
+    image: mysql:8.0
+    container_name: railsync_payment_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: railsync_payment
+      MYSQL_ROOT_PASSWORD: root_secret
+      MYSQL_PASSWORD: secret
+      MYSQL_USER: railsync
+    ports:
+      - "3304:3306"
+    volumes:
+      - payment_mysql_data:/var/lib/mysql
+      - ./docker/mysql.cnf:/etc/mysql/conf.d/my.cnf
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      retries: 3
+      timeout: 5s
+    networks:
+      - railsync_network
+
+  # ===== NOTIFICATION SERVICE (Port 8005) =====
+  notification-app:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: railsync_notification_app
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      - APP_NAME=RailSync-Notification
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - APP_URL=http://notification-app:8005
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QUEUE_CONNECTION=redis
+      - SERVICE_NAME=notification-service
+      - AUTH_SERVICE_URL=http://auth-app:8000
+      - BOOKING_SERVICE_URL=http://booking-app:8000
+      - MAIL_DRIVER=log
+      - MAIL_FROM_ADDRESS=noreply@railsync.com
+    volumes:
+      - ./services/notification-service:/app
+    ports:
+      - "8005:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth-app:
+        condition: service_started
+      booking-app:
+        condition: service_started
+    networks:
+      - railsync_network
+
+  notification-nginx:
+    image: nginx:alpine
+    container_name: railsync_notification_nginx
+    restart: unless-stopped
+    ports:
+      - "9005:80"
+    volumes:
+      - ./services/notification-service/public:/app/public
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - notification-app
+    networks:
+      - railsync_network
+
+  # ===== SHARED REDIS (Queue & Cache) =====
+  redis:
+    image: redis:7-alpine
+    container_name: railsync_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      retries: 3
+      timeout: 5s
+    networks:
+      - railsync_network
+
+networks:
+  railsync_network:
+    driver: bridge
+
+volumes:
+  auth_mysql_data:
+    driver: local
+  train_mysql_data:
+    driver: local
+  booking_mysql_data:
+    driver: local
+  payment_mysql_data:
+    driver: local
+  redis_data:
+    driver: local

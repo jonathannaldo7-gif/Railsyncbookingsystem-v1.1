@@ -51,7 +51,16 @@ class BookingService
 
         // Create booking
         try {
-            $booking = Booking::create($data);
+            $amount = $seat->price > 0 ? $seat->price : $train->marketPrice();
+
+            $booking = Booking::create(array_merge($data, [
+                'payment_status' => 'unpaid',
+                'payment_amount' => $amount,
+                'payment_method' => null,
+                'payment_reference' => null,
+                'paid_at' => null,
+                'payment_expires_at' => null,
+            ]));
             return ['success' => $booking];
         } catch (\Exception $e) {
             // If booking creation fails, release the seat
@@ -67,10 +76,13 @@ class BookingService
     public function confirmBooking(Booking $booking)
     {
         try {
-            $booking->update(['status' => 'confirmed']);
+            $booking->update([
+                'status' => 'confirmed',
+                'payment_expires_at' => now()->addMinutes(3),
+            ]);
 
-            // Send notification to user
-            $this->sendConfirmationNotification($booking);
+            // Dispatch confirmation email as a queued job
+            \App\Jobs\SendBookingConfirmation::dispatch($booking);
 
             return ['success' => $booking];
         } catch (\Exception $e) {
@@ -79,15 +91,20 @@ class BookingService
         }
     }
 
-    /**
-     * Send confirmation notification to user
-     */
-    private function sendConfirmationNotification(Booking $booking)
+    public function expirePendingPayments(): void
     {
-        try {
-            \Illuminate\Support\Facades\Mail::to($booking->user->email)->send(new \App\Mail\BookingConfirmed($booking));
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Failed to send confirmation email: ' . $e->getMessage());
-        }
+        Booking::with('seat')
+            ->where('status', 'confirmed')
+            ->where('payment_status', 'unpaid')
+            ->whereNotNull('payment_expires_at')
+            ->where('payment_expires_at', '<', now())
+            ->get()
+            ->each(function (Booking $booking) {
+                if ($booking->seat) {
+                    $booking->seat->update(['is_reserved' => false]);
+                }
+
+                $booking->update(['status' => 'cancelled']);
+            });
     }
 }

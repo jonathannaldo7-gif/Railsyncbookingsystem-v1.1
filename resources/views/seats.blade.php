@@ -16,6 +16,10 @@
                     <label for="seat-number">Seat Number</label>
                     <input id="seat-number" type="text" placeholder="A1">
                 </div>
+                <div>
+                    <label for="seat-price">Price</label>
+                    <input id="seat-price" type="number" min="0" step="0.01" placeholder="0.00">
+                </div>
             </div>
             <button id="create-seat">Create Seat</button>
         </div>
@@ -59,6 +63,7 @@
                     <td>${seat.id}</td>
                     <td>${seat.train ? seat.train.name : 'N/A'}</td>
                     <td>${seat.seat_number}</td>
+                    <td>${Number(seat.price).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}</td>
                     <td>${status}</td>
                     <td class="actions">
                         <button onclick="reserveSeat(${seat.id})" class="secondary">Reserve</button>
@@ -92,6 +97,7 @@
         const payload = {
             train_id: Number(document.getElementById('seat-train').value),
             seat_number: document.getElementById('seat-number').value,
+            price: Number(document.getElementById('seat-price').value) || 0,
         };
         const { status, body } = await requestJson('POST', '/api/seats', payload);
         if (status === 201) {
